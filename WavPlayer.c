@@ -17,12 +17,12 @@ static FATFS fatfs;
 static char FileName[32] = "Asine.wav";
 static char *SD_File;
 
-#ifdef __ICCARM__
-#pragma data_alignment = 32
-u8 DestinationAddress[10*1024];
-#else
-u8 DestinationAddress[10*1024] __attribute__ ((aligned(32)));
-#endif
+// #ifdef __ICCARM__
+// #pragma data_alignment = 32
+// u8 DestinationAddress[10*1024];
+// #else
+// u8 DestinationAddress[10*1024] __attribute__ ((aligned(32)));
+// #endif
 
 // Define constants for WAV file headers
 #define CHUNK_ID_SIZE 4
@@ -48,6 +48,8 @@ typedef struct {
     int     subChunk2Size;
 } WAVHeader;
 
+// DDR3 memory address
+volatile uint32_t* DDR3_BASE_ADDR = (uint32_t*)XPAR_PS7_DDR_0_BASEADDRESS;
 /*****************************************************************************/
 /**
 *
@@ -72,7 +74,7 @@ int main(void)
 		return XST_FAILURE;
 	}
 
-	//xil_printf("succeeded \r\n");
+	xil_printf("succeeded \r\n");
 
 	return XST_SUCCESS;
 
@@ -141,11 +143,17 @@ int CopyWavFile_SDcardtoDDR(void)
     printf("Sample Rate: %d\n", header.sampleRate);
     printf("Bits Per Sample: %d\n", header.bitsPerSample);
 
-    //Print data from the WAV file
-    printf("Data:\n");
-    int16_t sample;
-    while (f_read(&fil, &sample, sizeof(sample), &NumBytesRead) == FR_OK && NumBytesRead == sizeof(sample)) {
-        printf("%d\n", sample);
+    // //Print data from the WAV file
+    // printf("Data:\n");
+    // int16_t sample;
+    // while (f_read(&fil, &sample, sizeof(sample), &NumBytesRead) == FR_OK && NumBytesRead == sizeof(sample)) {
+    //     printf("%d\n", sample);
+    // }
+
+    // Read and copy data from the WAV file to DDR3
+    uint32_t addr = (uint32_t)DDR3_BASE_ADDR;
+    while (f_read(&fil, (void*)addr, 4, &NumBytesRead) == FR_OK && NumBytesRead == 4) {
+        addr += 4; // Assuming 32-bit data
     }
 
 	//Close file.
