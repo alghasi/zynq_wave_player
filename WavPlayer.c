@@ -1,12 +1,14 @@
+#include <stdio.h>
 #include "xparameters.h"	/* SDK generated parameters */
 #include "xsdps.h"		/* SD device driver */
 #include "xil_printf.h"
 #include "ff.h"
 #include "xil_cache.h"
 #include "xplatform_info.h"
-
+#include "xil_types.h"
+#include "sleep.h"
 /************************** Function Prototypes ******************************/
-int CopyWavFile_SDcardtoDDR(void);
+s32 CopyWavFile_SDcardtoDDR(void);
 
 /************************** Variable Definitions *****************************/
 static FIL fil;		/* File object */
@@ -28,28 +30,28 @@ static char *SD_File;
 #define CHUNK_ID_SIZE 4
 #define RIFF_ID "RIFF"
 #define WAVE_ID "WAVE"
-#define FMT_ID "fmt "
+#define FMT_ID  "fmt "
 #define DATA_ID "data"
 
 // WAV file header structure
 typedef struct {
-    char    chunkID[CHUNK_ID_SIZE];
-    int     chunkSize;
-    char    format[4];
-    char    subChunk1ID[CHUNK_ID_SIZE];
-    int     subChunk1Size;
-    short   audioFormat;
-    short   numChannels;
-    int     sampleRate;
-    int     byteRate;
-    short   blockAlign;
-    short   bitsPerSample;
-    char    subChunk2ID[CHUNK_ID_SIZE];
-    int     subChunk2Size;
+    char   chunkID[CHUNK_ID_SIZE];
+    u32    chunkSize;
+    char   format[CHUNK_ID_SIZE];
+    char   subChunk1ID[CHUNK_ID_SIZE];
+    u32    subChunk1Size;
+    u16    audioFormat;
+    u16    numChannels;
+    u32    sampleRate;
+    u32    byteRate;
+    u16    blockAlign;
+    u16    bitsPerSample;
+    char   subChunk2ID[CHUNK_ID_SIZE];
+    u32    subChunk2Size;
 } WAVHeader;
 
 // DDR3 memory address
-volatile uint32_t* DDR3_BASE_ADDR = (uint32_t*)XPAR_PS7_DDR_0_BASEADDRESS;
+volatile u32* DDR3_ADDR = (u32*)XPAR_PS7_DDR_0_BASEADDRESS + 0x1000000;
 /*****************************************************************************/
 /**
 *
@@ -62,9 +64,9 @@ volatile uint32_t* DDR3_BASE_ADDR = (uint32_t*)XPAR_PS7_DDR_0_BASEADDRESS;
 * @note		None
 *
 ******************************************************************************/
-int main(void)
+s32 main(void)
 {
-	int Status;
+	s32 Status;
 
 	//xil_printf("Read Wav file on SD card and copy on DDR \r\n");
 
@@ -95,11 +97,11 @@ int main(void)
 * @note		None
 *
 ******************************************************************************/
-int CopyWavFile_SDcardtoDDR(void)
+s32 CopyWavFile_SDcardtoDDR(void)
 {
 	FRESULT Res;
-	UINT NumBytesRead;
-    WAVHeader header;
+	u32 NumBytesRead;
+    WAVHeader header;    
 
 	//To test logical drive 0, Path should be "0:/"
 	//For logical drive 1, Path should be "1:/"
@@ -133,29 +135,33 @@ int CopyWavFile_SDcardtoDDR(void)
     // Check if the file is a valid WAV file
     if (strncmp(header.chunkID, RIFF_ID, CHUNK_ID_SIZE) != 0 ||
         strncmp(header.format, WAVE_ID, CHUNK_ID_SIZE) != 0) {
-        printf("Not a valid WAV file.\n");
+        xil_printf("Not a valid WAV file.\n");
         f_close(&fil);
         return 1;
     }
 
     // Print WAV file information
-    printf("Channels: %d\n", header.numChannels);
-    printf("Sample Rate: %d\n", header.sampleRate);
-    printf("Bits Per Sample: %d\n", header.bitsPerSample);
+    xil_printf("chunkID:        %.4s\n" , header.chunkID);
+    xil_printf("chunkSize:      %d\n"   , header.chunkSize);
+    xil_printf("format:         %.4s\n" , header.format);
+    xil_printf("subChunk1ID:    %.4s\n" , header.subChunk1ID);
+    xil_printf("subChunk1Size:  %d\n"   , header.subChunk1Size);
+    xil_printf("audioFormat:    %d\n"   , header.audioFormat);
+    xil_printf("numChannels:    %d\n"   , header.numChannels);
+    xil_printf("sampleRate:     %d\n"   , header.sampleRate);
+    xil_printf("byteRate:       %d\n"   , header.byteRate);
+    xil_printf("blockAlign:     %d\n"   , header.blockAlign);
+    xil_printf("bitsPerSample:  %d\n"   , header.bitsPerSample);
+    xil_printf("subChunk2ID:    %.4s\n" , header.subChunk2ID);
+    xil_printf("subChunk2Size:  %d\n"   , header.subChunk2Size); 
 
-    // //Print data from the WAV file
-    // printf("Data:\n");
-    // int16_t sample;
-    // while (f_read(&fil, &sample, sizeof(sample), &NumBytesRead) == FR_OK && NumBytesRead == sizeof(sample)) {
-    //     printf("%d\n", sample);
-    // }
-
-    // Read and copy data from the WAV file to DDR3
-    uint32_t addr = (uint32_t)DDR3_BASE_ADDR;
-    while (f_read(&fil, (void*)addr, 4, &NumBytesRead) == FR_OK && NumBytesRead == 4) {
-        addr += 4; // Assuming 32-bit data
+    //Read and copy data from the WAV file to DDR3
+    while ((f_read(&fil, (void*)DDR3_ADDR, 4, &NumBytesRead) ) == FR_OK && NumBytesRead == 4)
+    {
+        DDR3_ADDR += 1;
     }
 
+    //xil_printf("test1 \r\n");
 	//Close file.
 	Res = f_close(&fil);
 	if (Res) {
